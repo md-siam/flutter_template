@@ -34,7 +34,7 @@ dependencies:
   shared_preferences: ^2.5.5
   flutter_screenutil: ^5.9.3
   connectivity_plus: ^7.1.1
-  flutter_gen: ^5.14.1
+  flutter_gen: ^5.15.0
   webview_flutter: ^4.13.1
   url_launcher: ^6.3.2
 
