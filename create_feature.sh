@@ -343,12 +343,12 @@ class ${ENTITY_CAMEL}Cubit extends Cubit<${ENTITY_CAMEL}State> {
   ${ENTITY_CAMEL}Cubit(this.useCase) : super(${ENTITY_CAMEL}State());
 
   Future<void> fetchAll() async {
-    emit(state.copyWith(status: BaseStatus<${ENTITY_CAMEL}State>.loading()));
+    emit(state.copyWith(status: BaseStatus.loading()));
     try {
       final list = await useCase.call();
       emit(
         state.copyWith(
-          status: BaseStatus<${ENTITY_CAMEL}State>.success(),
+          status: BaseStatus.success(),
           featureEntities: list,
         ),
       );
@@ -376,8 +376,8 @@ part '${FEATURE_SNAKE}_state.freezed.dart';
 sealed class ${ENTITY_CAMEL}State with _\$${ENTITY_CAMEL}State {
   const factory ${ENTITY_CAMEL}State({
     @Default([]) List<${ENTITY_CAMEL}Entity> featureEntities,
-    @Default(BaseStatus<${ENTITY_CAMEL}State>.initial())
-    BaseStatus<${ENTITY_CAMEL}State> status,
+    @Default(BaseStatus.initial())
+    BaseStatus status,
   }) = _${ENTITY_CAMEL}State;
 }
 EOF
