@@ -45,7 +45,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   json_serializable: ^6.13.2
-  retrofit_generator: ^10.2.6
+  retrofit_generator: ^10.2.8
   flutter_gen_runner: ^5.14.1
   very_good_analysis: ^10.2.0
 
