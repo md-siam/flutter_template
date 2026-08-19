@@ -4,14 +4,54 @@ set -e
 FEATURE_NAME=$1
 
 if [ -z "$FEATURE_NAME" ]; then
-  echo "❌ Usage: ./create_feature.sh <feature_name>"
-  echo "Example: ./create_feature.sh test_feature"
-  exit 1
+	echo "❌ Usage: ./create_feature.sh <feature_name>"
+	echo "Example: ./create_feature.sh test_feature"
+	exit 1
 fi
+
+# ---------------------------
+# Portable in-place sed edit.
+# GNU sed (Linux) accepts `sed -i 'script' file`.
+# BSD/macOS sed requires an explicit backup-suffix argument after -i, or it
+# misparses the following arguments entirely. `-i.bak` (suffix attached, no
+# space) is accepted identically by both, so we use that and delete the
+# backup file afterwards.
+# ---------------------------
+sed_inplace() {
+	local script="$1"
+	local file="$2"
+	sed -i.bak -e "$script" "$file"
+	rm -f "$file.bak"
+}
 
 # Convert feature name to snake case (all lowercase, underscores)
 FEATURE_SNAKE=$(echo "$FEATURE_NAME" | tr '[:upper:]' '[:lower:]')
-ENTITY_CAMEL=$(echo "$FEATURE_NAME" | sed -r 's/(^|_)([a-zA-Z])/\U\2/g')
+# Convert to PascalCase (e.g. order_history -> OrderHistory). Uses portable
+# POSIX awk (toupper/substr) instead of GNU sed's -r/\U extensions, which
+# BSD/macOS sed doesn't support.
+ENTITY_CAMEL=$(echo "$FEATURE_SNAKE" | awk -F'_' 'BEGIN{OFS=""} {for (i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)} 1')
+
+# ---------------------------
+# Reject feature names whose generated `${ENTITY_CAMEL}Route` class name
+# collides with a symbol already exported by a dependency. auto_route's
+# @AutoRouterConfig(replaceInRouteName: 'Screen|Page,Route') turns
+# `${ENTITY_CAMEL}Screen` into `${ENTITY_CAMEL}Route` in the generated
+# app_router.gr.dart, and app_router.dart imports both that file and
+# `package:auto_route/auto_route.dart` — if the two define the same class
+# name, Dart raises an ambiguous-import error that build_runner cannot fix.
+# Known confirmed collision: "test" -> TestRoute clashes with a symbol
+# exported from auto_route/src/route/auto_route_config.dart.
+# ---------------------------
+RESERVED_FEATURE_NAMES="test tests route routes page pages screen screens widget widgets app"
+for reserved in $RESERVED_FEATURE_NAMES; do
+	if [ "$FEATURE_SNAKE" = "$reserved" ]; then
+		echo "❌ Feature name '$FEATURE_NAME' is too generic and its generated route class"
+		echo "   '${ENTITY_CAMEL}Route' is likely to collide with a symbol from a dependency"
+		echo "   (e.g. 'test' -> TestRoute clashes with a class exported by the auto_route package)."
+		echo "   Pick a more specific name, e.g. '${FEATURE_SNAKE}_feature' or '${FEATURE_SNAKE}_module'."
+		exit 1
+	fi
+done
 
 # ---------------------------
 # Paths (Feature-first, Layer-inside: everything for a feature lives
@@ -70,7 +110,7 @@ mkdir -p "$PRESENTATION_DIR" "$COMPONENTS_DIR"
 mkdir -p lib/core/generated
 BASE_ENTITY_FILE="lib/core/generated/base_entity.dart"
 if [ ! -f "$BASE_ENTITY_FILE" ]; then
-  cat <<'EOF' > "$BASE_ENTITY_FILE"
+	cat <<'EOF' >"$BASE_ENTITY_FILE"
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 // Add your new entity part below
@@ -79,10 +119,11 @@ EOF
 fi
 ENTITY_PART_LINE="part '../../features/$FEATURE_SNAKE/domain/entity/${FEATURE_SNAKE}_entity.dart';"
 if ! grep -Fxq "$ENTITY_PART_LINE" "$BASE_ENTITY_FILE"; then
-  sed -i "/^\/\/ Add your new entity part below\$/a $ENTITY_PART_LINE" "$BASE_ENTITY_FILE"
+	sed_inplace "/^\/\/ Add your new entity part below\$/a\\
+$ENTITY_PART_LINE" "$BASE_ENTITY_FILE"
 fi
 
-cat <<EOF > "$DOMAIN_ENTITY_FILE"
+cat <<EOF >"$DOMAIN_ENTITY_FILE"
 part of '../../../../core/generated/base_entity.dart';
 
 @freezed
@@ -98,7 +139,7 @@ echo "⚠️  Run build_runner to (re)generate lib/core/generated/base_entity.fr
 # ---------------------------
 # Domain Repository
 # ---------------------------
-cat <<EOF > "$DOMAIN_REPO_FILE"
+cat <<EOF >"$DOMAIN_REPO_FILE"
 import 'package:flutter_template/core/generated/base_entity.dart';
 
 abstract class ${ENTITY_CAMEL}Repository {
@@ -110,7 +151,7 @@ EOF
 # ---------------------------
 # Domain UseCase
 # ---------------------------
-cat <<EOF > "$DOMAIN_USECASE_FILE"
+cat <<EOF >"$DOMAIN_USECASE_FILE"
 import 'package:injectable/injectable.dart';
 import 'package:flutter_template/core/generated/base_entity.dart';
 import 'package:flutter_template/features/$FEATURE_SNAKE/domain/repository/${FEATURE_SNAKE}_repository.dart';
@@ -135,7 +176,7 @@ EOF
 # ---------------------------
 BASE_RESPONSE_FILE="lib/core/generated/base_response_model.dart"
 if [ ! -f "$BASE_RESPONSE_FILE" ]; then
-  cat <<'EOF' > "$BASE_RESPONSE_FILE"
+	cat <<'EOF' >"$BASE_RESPONSE_FILE"
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 // Add your new response model part below
@@ -145,10 +186,11 @@ EOF
 fi
 MODEL_PART_LINE="part '../../features/$FEATURE_SNAKE/data/models/${FEATURE_SNAKE}_model.dart';"
 if ! grep -Fxq "$MODEL_PART_LINE" "$BASE_RESPONSE_FILE"; then
-  sed -i "/^\/\/ Add your new response model part below\$/a $MODEL_PART_LINE" "$BASE_RESPONSE_FILE"
+	sed_inplace "/^\/\/ Add your new response model part below\$/a\\
+$MODEL_PART_LINE" "$BASE_RESPONSE_FILE"
 fi
 
-cat <<EOF > "$DATA_MODEL_FILE"
+cat <<EOF >"$DATA_MODEL_FILE"
 part of '../../../../core/generated/base_response_model.dart';
 
 @freezed
@@ -168,7 +210,7 @@ echo "⚠️  Run build_runner to (re)generate lib/core/generated/base_response_
 # ---------------------------
 # Repository Implementation
 # ---------------------------
-cat <<EOF > "$DATA_REPO_IMPL_FILE"
+cat <<EOF >"$DATA_REPO_IMPL_FILE"
 import 'package:injectable/injectable.dart';
 import 'package:flutter_template/core/generated/base_data_source.dart';
 import 'package:flutter_template/core/generated/base_entity.dart';
@@ -201,7 +243,7 @@ EOF
 # ---------------------------
 # Remapper
 # ---------------------------
-cat <<EOF > "$DATA_REMAPPER_FILE"
+cat <<EOF >"$DATA_REMAPPER_FILE"
 import 'package:flutter_template/core/generated/base_response_model.dart';
 import 'package:flutter_template/core/generated/base_entity.dart';
 
@@ -222,7 +264,7 @@ EOF
 # ---------------------------
 BASE_DATA_SOURCE_FILE="lib/core/generated/base_data_source.dart"
 if [ ! -f "$BASE_DATA_SOURCE_FILE" ]; then
-  cat <<'EOF' > "$BASE_DATA_SOURCE_FILE"
+	cat <<'EOF' >"$BASE_DATA_SOURCE_FILE"
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
 import 'package:retrofit/retrofit.dart';
@@ -235,14 +277,16 @@ EOF
 fi
 DS_RESPONSE_MODEL_IMPORT_LINE="import 'package:flutter_template/core/generated/base_response_model.dart';"
 if ! grep -Fxq "$DS_RESPONSE_MODEL_IMPORT_LINE" "$BASE_DATA_SOURCE_FILE"; then
-  sed -i "1i $DS_RESPONSE_MODEL_IMPORT_LINE" "$BASE_DATA_SOURCE_FILE"
+	sed_inplace "1i\\
+$DS_RESPONSE_MODEL_IMPORT_LINE" "$BASE_DATA_SOURCE_FILE"
 fi
 DS_PART_LINE="part '../../features/$FEATURE_SNAKE/data/data_source/${FEATURE_SNAKE}_remote_data_source.dart';"
 if ! grep -Fxq "$DS_PART_LINE" "$BASE_DATA_SOURCE_FILE"; then
-  sed -i "/^\/\/ Add your new remote data source part below\$/a $DS_PART_LINE" "$BASE_DATA_SOURCE_FILE"
+	sed_inplace "/^\/\/ Add your new remote data source part below\$/a\\
+$DS_PART_LINE" "$BASE_DATA_SOURCE_FILE"
 fi
 
-cat <<EOF > "$DATA_REMOTE_DS_FILE"
+cat <<EOF >"$DATA_REMOTE_DS_FILE"
 part of '../../../../core/generated/base_data_source.dart';
 
 @RestApi()
@@ -262,7 +306,7 @@ echo "⚠️  Run build_runner to (re)generate lib/core/generated/base_data_sour
 # ---------------------------
 # Local Data Source
 # ---------------------------
-cat <<EOF > "$DATA_LOCAL_DS_FILE"
+cat <<EOF >"$DATA_LOCAL_DS_FILE"
 import 'package:injectable/injectable.dart';
 import 'package:flutter_template/core/generated/base_response_model.dart';
 
@@ -281,7 +325,7 @@ EOF
 # ---------------------------
 # Cubit
 # ---------------------------
-cat <<EOF > "$CUBIT_FILE"
+cat <<EOF >"$CUBIT_FILE"
 import 'package:bloc/bloc.dart';
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
@@ -321,7 +365,7 @@ EOF
 # ---------------------------
 # State
 # ---------------------------
-cat <<EOF > "$STATE_FILE"
+cat <<EOF >"$STATE_FILE"
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:flutter_template/core/state_status/base_status.dart';
 import 'package:flutter_template/core/generated/base_entity.dart';
@@ -341,7 +385,7 @@ EOF
 # ---------------------------
 # Screens
 # ---------------------------
-cat <<EOF > "$SCREEN_FILE"
+cat <<EOF >"$SCREEN_FILE"
 import 'package:auto_route/annotations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -379,7 +423,7 @@ class ${ENTITY_CAMEL}Screen extends Screen {
 EOF
 
 # Portrait View
-cat <<EOF > "$PORTRAIT_VIEW_FILE"
+cat <<EOF >"$PORTRAIT_VIEW_FILE"
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_template/core/state_status/base_status.dart';
@@ -417,7 +461,7 @@ class ${ENTITY_CAMEL}PortraitView extends StatelessWidget {
 EOF
 
 # Landscape View
-cat <<EOF > "$LANDSCAPE_VIEW_FILE"
+cat <<EOF >"$LANDSCAPE_VIEW_FILE"
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_template/core/state_status/base_status.dart';
@@ -457,7 +501,7 @@ EOF
 # ---------------------------
 # ListView Component
 # ---------------------------
-cat <<EOF > "$LIST_VIEW_FILE"
+cat <<EOF >"$LIST_VIEW_FILE"
 import 'package:flutter/material.dart';
 import 'package:flutter_template/core/generated/base_entity.dart';
 
@@ -486,11 +530,11 @@ EOF
 # ---------------------------
 echo "🔹 Running build_runner..."
 if command -v flutter >/dev/null 2>&1; then
-  flutter pub get
-  flutter pub run build_runner build --delete-conflicting-outputs
+	flutter pub get
+	flutter pub run build_runner build --delete-conflicting-outputs
 else
-  dart pub get
-  dart run build_runner build --delete-conflicting-outputs
+	dart pub get
+	dart run build_runner build --delete-conflicting-outputs
 fi
 
 # ---------------------------
@@ -501,8 +545,9 @@ ROUTE_LINE="AutoRoute(page: ${ENTITY_CAMEL}Route.page),"
 
 # Insert before the closing bracket of the routes list (assumes last line with '];')
 if ! grep -Fxq "$ROUTE_LINE" "$APP_ROUTER_FILE"; then
-  sed -i "/List<AutoRoute> get routes => \[/,/];/ s/];/    $ROUTE_LINE\n  ];/" "$APP_ROUTER_FILE"
-  echo "Added ${ENTITY_CAMEL}Screen route to app_router.dart"
+	sed_inplace "/List<AutoRoute> get routes => \[/,/];/ s/];/    ${ROUTE_LINE}\\
+  ];/" "$APP_ROUTER_FILE"
+	echo "Added ${ENTITY_CAMEL}Screen route to app_router.dart"
 fi
 
 echo "🎉 Feature '$FEATURE_NAME' generated successfully!"
