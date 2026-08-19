@@ -22,7 +22,20 @@ Clean Architecture's central tenet is preserving these well-defined layers to en
 
 The concentric circles within the image represent the different areas within the software. The closer to the center, the higher level the software becomes. The sole principle behind Clean Architecture is the **Dependency Rule**: code dependencies can only point inwards.
 
-> **Note:** this project organizes the three layers **Feature-first, Layer-inside** — each feature under `lib/features/<feature_name>/` owns its own `domain/`, `data/`, and `presentation/` folders, instead of one global `domain/`, `data/`, `presentation/` housing every feature. Code shared across multiple features (theming, routing, reusable widgets, the data-source abstract factory) lives in `lib/shared/`, mirroring the same three-layer split. Cross-cutting infrastructure that isn't part of the domain at all (DI, env/flavors, error types, helpers) stays in `lib/core/`, alongside `lib/core/generated/` — a single place holding the shared base classes (`BaseUseCase`) and the `part`/`part of` aggregators (`base_entity.dart`, `base_request_model.dart`, `base_response_model.dart`, `base_data_source.dart`) that let every feature's entities, DTOs, and Retrofit data sources be code-generated together instead of each owning its own `.freezed.dart`/`.g.dart`. The actual class definitions still live in their owning feature folder as `part of` files — see `CLAUDE.md` for the full explanation.
+> [!NOTE]
+> **Architecture: Feature-first, Layer-inside**
+>
+> This project organizes code by **feature first, layer inside** — each feature under `lib/features/<feature_name>/` owns its own `domain/`, `data/`, and `presentation/` folders, rather than one global `domain/`, `data/`, `presentation/` housing every feature.
+>
+> | Layer                   | Location                                                  | Purpose                                                                                                                                          |
+> | ----------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | **Feature code**        | `lib/features/<feature_name>/{domain,data,presentation}/` | Feature-specific logic, isolated per feature                                                                                                     |
+> | **Shared code**         | `lib/shared/{domain,data,presentation}/`                  | Code used across multiple features — theming, routing, reusable widgets, the data-source abstract factory — mirroring the same three-layer split |
+> | **Core infrastructure** | `lib/core/`                                               | Cross-cutting concerns outside the domain entirely — DI, env/flavors, error types, helpers                                                       |
+>
+> **Code generation:** `lib/core/generated/` holds shared base classes (`BaseUseCase`) and `part`/`part of` aggregators — `base_entity.dart`, `base_request_model.dart`, `base_response_model.dart`, `base_data_source.dart` — that let every feature's entities, DTOs, and Retrofit data sources be code-generated together, instead of each feature owning its own `.freezed.dart` / `.g.dart`. The actual class definitions still live in their owning feature folder as `part of` files.
+>
+> 📖 See [`CLAUDE.md`](./CLAUDE.md) for the full explanation.
 
 ## Benefits of implementing Clean Architecture
 
@@ -43,10 +56,12 @@ While Clean Architecture is a broad approach, this project follows a customized 
 </p>
 
 ### 1. Domain Layer
+
 The heart of the application, encapsulating business rules and use cases.
 
 **Entity**
 Fundamental concepts within the domain.
+
 ```dart
 @freezed
 abstract class UserEntity with _$UserEntity {
@@ -63,6 +78,7 @@ abstract class UserEntity with _$UserEntity {
 
 **UseCase**
 Application-specific operations.
+
 ```dart
 @singleton
 class GetUserListUseCase with BaseUseCase<List<UserEntity>> {
@@ -77,6 +93,7 @@ class GetUserListUseCase with BaseUseCase<List<UserEntity>> {
 
 **Repository Interface**
 Abstractions that define the contract for data access.
+
 ```dart
 abstract class UserRepository {
   Future<List<UserEntity>> getUserList();
@@ -85,10 +102,12 @@ abstract class UserRepository {
 ```
 
 ### 2. Data Layer
+
 Manages data-related operations, including storage and communication with external sources.
 
 **Data Source**
 Origins of data (e.g., APIs via Retrofit).
+
 ```dart
 @RestApi()
 @singleton
@@ -105,6 +124,7 @@ abstract class UserRemoteDataSource {
 
 **Repository Implementation**
 Implements the domain repository interface and handles data mapping.
+
 ```dart
 @Singleton(as: UserRepository)
 class UserRepositoryImpl extends UserRepository {
@@ -122,6 +142,7 @@ class UserRepositoryImpl extends UserRepository {
 
 **Response Objects & Mapper**
 Data structures for API responses and extensions to map them to domain entities.
+
 ```dart
 extension UserResponseMapper on List<UserResponseModel> {
   List<UserEntity> toUserEntities() {
@@ -140,9 +161,11 @@ extension UserResponseMapper on List<UserResponseModel> {
 ```
 
 ### 3. Presentation Layer
+
 Responsible for UI rendering and handling user interactions using the BLoC/Cubit pattern.
 
 **Communication (Cubit)**
+
 ```dart
 @injectable
 class UserCubit extends Cubit<UserState> {
@@ -164,14 +187,16 @@ class UserCubit extends Cubit<UserState> {
 
 ---
 
-## 4. How to run this project? 
+## 4. How to run this project?
 
 This project contains 3 flavors:
+
 - development
 - staging
 - production
 
 To run the desired flavor:
+
 ```bash
 # Development
 $ flutter run --flavor development --target lib/main_development.dart
@@ -296,6 +321,7 @@ test('emits loading then success', () async {
 
 > When using argument matchers like `any()` with a custom type, register a
 > fallback once in `setUpAll`:
+>
 > ```dart
 > registerFallbackValue(const LoginEntity(email: '', pin: ''));
 > ```
@@ -347,8 +373,8 @@ To add new text for localization, run the provided script:
 ./l10n_generator.sh
 ```
 
-* Specify the type as `text` when prompted.
-* Access localized text in your code using:
+- Specify the type as `text` when prompted.
+- Access localized text in your code using:
 
 ```dart
 context.l10n.text
