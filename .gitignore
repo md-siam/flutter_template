@@ -118,6 +118,7 @@ lib/l10n/gen/
 *.freezed.dart
 *.g.dart
 *.gr.dart
+*.gen.dart
 *.config.dart
 *.chopper.dart
 *.mocks.dart
